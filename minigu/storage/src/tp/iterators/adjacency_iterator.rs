@@ -38,7 +38,30 @@ impl Iterator for AdjacencyIterator<'_> {
         // 2. If yes, process the next entry, apply filters and visibility checks
         // 3. If no, call load_next_batch() to load the next batch of entries
         // 4. Repeat until an entry is found or no more data is available
-        None
+        if self.current_index >= self.current_entries.len() {
+            self.load_next_batch()?;
+        }
+        while self.current_index < self.current_entries.len() {
+            let entry = &self.current_entries[self.current_index];
+            self.current_index += 1;
+
+            // Apply filters
+            let eid = entry.eid();
+            let is_visible = self
+                .txn
+                .graph()
+                .edges
+                .get(&eid)
+                .map(|edge| edge.is_visible(self.txn))
+                .unwrap_or(false);
+
+            if is_visible && self.filters.iter().all(|f| f(entry)) {
+                self.current_adj = Some(entry.clone());
+                return Some(Ok(entry.clone()));
+            }
+        }
+        self.load_next_batch()?;
+        self.next()
     }
 }
 
@@ -49,6 +72,28 @@ impl<'a> AdjacencyIterator<'a> {
         // load BATCH_SIZE entries from adj_list into current_entries
         // reset current_index to 0
         // if data is loaded return Some(()), else return None
+        if let Some(adj_list) = &self.adj_list {
+            let mut current = if let Some(last) = self.current_entries.last() {
+                adj_list.get(last)?.next()?
+            } else {
+                adj_list.front()?
+            };
+            self.current_entries.clear();
+            self.current_index = 0;
+            
+            self.current_entries.push(*current.value());
+            for _ in 0..BATCH_SIZE {
+                if let Some(entry) = current.next() {
+                    self.current_entries.push(*entry.value());
+                    current = entry;
+                } else {
+                    break;
+                }
+            }
+            if !self.current_entries.is_empty() {
+                return Some(());
+            }
+        }
         None
     }
 
