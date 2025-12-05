@@ -26,17 +26,24 @@ impl Iterator for EdgeIterator<'_> {
     /// Retrieves the next visible edge that satisfies all filters.
     fn next(&mut self) -> Option<Self::Item> {
         for entry in self.inner.by_ref() {
-            let edge = entry.value().data();
+            let eid = *entry.key();
 
-            if edge.is_tombstone() {
-                continue;
-            }
+            // Use MVCC-aware accessor to get the visible version for this txn.
+            match entry.value().get_visible(self.txn) {
+                Ok(edge) => {
+                    if edge.is_tombstone() {
+                        continue;
+                    }
 
-            // Apply all filtering conditions
-            if self.filters.iter().all(|f| f(&edge)) {
-                // Record the edge read in the transaction
-                self.current_edge = Some(edge.clone());
-                return Some(Ok(edge));
+                    // Apply all filtering conditions
+                    if self.filters.iter().all(|f| f(&edge)) {
+                        // Record the edge read in the transaction
+                        self.txn.edge_reads().insert(eid);
+                        self.current_edge = Some(edge.clone());
+                        return Some(Ok(edge));
+                    }
+                }
+                Err(_) => continue, // Not visible to this txn (or tombstone)
             }
         }
 

@@ -56,6 +56,8 @@ impl Iterator for AdjacencyIterator<'_> {
                 .unwrap_or(false);
 
             if is_visible && self.filters.iter().all(|f| f(entry)) {
+                // Record the edge read for serializability checks
+                self.txn.edge_reads().insert(eid);
                 self.current_adj = Some(entry.clone());
                 return Some(Ok(entry.clone()));
             }
@@ -127,6 +129,9 @@ impl<'a> AdjacencyIterator<'a> {
         if result.adj_list.is_some() {
             result.load_next_batch();
         }
+
+        // Record vertex read to prevent phantom edges for this adjacency traversal
+        result.txn.vertex_reads().insert(vid);
 
         result
     }

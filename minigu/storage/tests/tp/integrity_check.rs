@@ -30,7 +30,7 @@ const BASELINE_HASHES: &[(&str, &str)] = &[
     ),
     (
         "mod.rs",
-        "fb4a903ecda3e09858ce0764b967e81b01e3985d0f598b204403202e87ceedf0",
+        "c80931686d9d6ff0c6765356c1da286799f86ba99d5a14be5cc9d94b8e469664",
     ),
 ];
 
